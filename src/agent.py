@@ -2,15 +2,20 @@
 
   1. RETRY com backoff exponencial, SO para erros transitorios (TRANSIENT/timeout).
      Erro permanente (INVALID/NOT_FOUND) NAO e repetido: repetir so gasta custo.
-  2. TETO DE CUSTO: o gasto estimado (tokens x preco) e checado ANTES de executar a acao;
-     estourou -> para sem chamar a ferramenta.
+  2. TETO DE CUSTO DURO: ANTES de cada chamada ao modelo (politica) o agente estima o PIOR caso
+     do passo (entrada conhecida + max_output_tokens, o max_tokens que um provedor imporia).
+     Se gasto + pior caso > teto, para SEM chamar o modelo. Assim o custo final <= teto, desde
+     que a politica respeite max_output_tokens. Ha ainda uma checagem DEPOIS da chamada (defesa em
+     profundidade): so dispara se a politica estourar o proprio max_output_tokens.
   3. TRACING: cada decisao da politica e cada tentativa de ferramenta viram um span
      (JSONL) com latencia, custo, tentativa e status.
 
 Mais: limite de passos e deteccao de loop (mesma ferramenta+argumentos repetida).
 
 Custo estimado: tokens ~ len(texto)/4; preco ilustrativo (US$3/M entrada, US$15/M saida).
-O agente nao chama LLM nenhum aqui, mas contabiliza como se chamasse, para o teto ser testavel."""
+O agente nao chama LLM nenhum aqui, mas contabiliza como se chamasse, para o teto ser testavel.
+Limite do estimador: chars/4 e o mesmo contador do livro-caixa, entao "duro" vale em relacao a ele;
+com tokenizer real, use safety_margin > 1."""
 from __future__ import annotations
 
 import json
@@ -27,6 +32,11 @@ PRICE_IN, PRICE_OUT = 3.0 / 1e6, 15.0 / 1e6
 
 def tokens(s: str) -> int:
     return max(1, len(s) // 4)
+
+
+def input_text(question: str, scratch: list) -> str:
+    """Texto que o modelo receberia neste passo: pergunta + historico acao/observacao."""
+    return question + "".join(f" {s.action.tool} {s.observation}" for s in scratch)
 
 
 @dataclass
@@ -54,9 +64,11 @@ class Tracer:
 
 class Agent:
     def __init__(self, client, policy, *, max_steps: int = 6, max_cost_usd: float = 0.01,
-                 max_attempts: int = 3, backoff_s: float = 0.2, sleep=time.sleep):
+                 max_attempts: int = 3, backoff_s: float = 0.2, sleep=time.sleep,
+                 max_output_tokens: int = 256, safety_margin: float = 1.0):
         self.client, self.policy = client, policy
         self.max_steps, self.max_cost = max_steps, max_cost_usd
+        self.max_out, self.margin = max_output_tokens, safety_margin
         self.max_attempts, self.backoff = max_attempts, backoff_s
         self.sleep = sleep
 
@@ -86,6 +98,12 @@ class Agent:
                 retries += 1
         return text, "transient_exhausted", retries
 
+    # ------------------------------------------------------------------ custo
+    def worst_case_usd(self, question: str, scratch: list) -> float:
+        """Pior caso do proximo passo: entrada ja conhecida + saida no limite de max_output_tokens.
+        `safety_margin` > 1 cobre a diferenca entre o estimador (chars/4) e o tokenizer real."""
+        return (tokens(input_text(question, scratch)) * PRICE_IN + self.max_out * PRICE_OUT) * self.margin
+
     # ------------------------------------------------------------------ loop
     def run(self, question: str) -> Result:
         tr, scratch, cost, retries, seen = Tracer(), [], 0.0, 0, set()
@@ -95,15 +113,23 @@ class Agent:
             return Result(status, answer, len(scratch), retries, round(cost, 6), called, tr.spans)
 
         for i in range(1, self.max_steps + 1):
+            worst = self.worst_case_usd(question, scratch)
+            if cost + worst > self.max_cost:          # estima ANTES de pagar: nao chama o modelo
+                tr.add(type="budget_block", step=i, cost_acumulado=round(cost, 6),
+                       est_pior_caso_usd=round(worst, 6), teto_usd=self.max_cost)
+                return done("budget_exceeded", f"Interrompido antes de chamar o modelo: o proximo passo poderia "
+                                               f"custar ate US$ {worst:.6f} e passaria do teto (US$ {self.max_cost}).")
             decision = self.policy.decide(question, scratch)
-            text_in = question + "".join(f" {s.action.tool} {s.observation}" for s in scratch)
+            text_in = input_text(question, scratch)
             text_out = json.dumps({"tool": decision.tool, "args": decision.args}) if isinstance(decision, Action) else decision.text
             c = tokens(text_in) * PRICE_IN + tokens(text_out) * PRICE_OUT
             cost += c
             tr.add(type="policy", step=i, decision=type(decision).__name__.lower(),
-                   thought=getattr(decision, "thought", ""), cost_usd=round(c, 6), cost_acumulado=round(cost, 6))
+                   thought=getattr(decision, "thought", ""), est_pior_caso_usd=round(worst, 6),
+                   cost_usd=round(c, 6), cost_acumulado=round(cost, 6))
             if cost > self.max_cost:
-                return done("budget_exceeded", f"Interrompido: teto de custo (US$ {self.max_cost}) atingido.")
+                return done("budget_exceeded", f"Interrompido: a politica estourou max_output_tokens e o teto "
+                                               f"(US$ {self.max_cost}) foi ultrapassado.")
             if isinstance(decision, Final):
                 return done(decision.status, decision.text)
             key = (decision.tool, json.dumps(decision.args, sort_keys=True))

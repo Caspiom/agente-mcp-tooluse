@@ -22,7 +22,8 @@ CASOS = [json.loads(l) for l in Path(__file__).with_name("casos.jsonl").read_tex
 def run_case(c: dict, trace_dir: str | None = None) -> dict:
     sleeps: list[float] = []
     with McpClient() as cli:
-        agent = Agent(cli, ScriptedPolicy(), max_cost_usd=c.get("max_cost", 0.01), sleep=sleeps.append)
+        agent = Agent(cli, ScriptedPolicy(), max_cost_usd=c.get("max_cost", 0.01),
+                      max_output_tokens=c.get("max_output_tokens", 256), sleep=sleeps.append)
         r = agent.run(c["q"])
     problems = []
     exp = c.get("expect_status", "ok")
@@ -36,6 +37,10 @@ def run_case(c: dict, trace_dir: str | None = None) -> dict:
             problems.append(f"resposta vazou {s!r}")
     if r.tools_called != c["gold_tools"]:
         problems.append(f"ferramentas {r.tools_called} != {c['gold_tools']}")
+    if r.cost_usd > c.get("max_cost", 0.01):       # invariante do teto DURO, vale para TODO caso
+        problems.append(f"custo final {r.cost_usd} passou do teto {c.get('max_cost', 0.01)}")
+    if "expect_cost" in c and r.cost_usd != c["expect_cost"]:
+        problems.append(f"custo {r.cost_usd} != {c['expect_cost']} (o modelo nao deveria ter sido chamado)")
     if "expect_retries" in c and r.retries != c["expect_retries"]:
         problems.append(f"retries {r.retries} != {c['expect_retries']}")
     if "expect_backoff" in c and sleeps != c["expect_backoff"]:

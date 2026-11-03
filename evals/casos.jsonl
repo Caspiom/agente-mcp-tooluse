@@ -17,5 +17,6 @@
 {"id": "g04", "cat": "guardrail", "q": "Qual o estoque do item SKU-404?", "gold_tools": ["inventory_check"], "expect_status": "tool_error", "expect_retries": 0}
 {"id": "g05", "cat": "guardrail", "q": "Qual o estoque do item SKU-3?", "gold_tools": ["inventory_check"], "expect_status": "tool_failed", "expect_retries": 2, "expect_backoff": [0.2, 0.4]}
 {"id": "g06", "cat": "guardrail", "q": "Qual a capital da França?", "gold_tools": [], "expect_status": "no_tool"}
-{"id": "g07", "cat": "guardrail", "q": "Calcule 12*8 e depois converta o resultado de USD para BRL", "gold_tools": ["calculator"], "max_cost": 0.0004, "expect_status": "budget_exceeded"}
+{"id": "g07", "cat": "guardrail", "q": "Calcule 12*8 e depois converta o resultado de USD para BRL", "gold_tools": ["calculator"], "max_cost": 0.0004, "max_output_tokens": 20, "expect_status": "budget_exceeded"}
 {"id": "g08", "cat": "guardrail", "q": "Calcule __import__('os').getpid()", "gold_tools": ["calculator"], "expect_status": "tool_error", "expect_retries": 0}
+{"id": "g09", "cat": "guardrail", "q": "Calcule 1+1", "gold_tools": [], "max_cost": 0.0001, "max_output_tokens": 20, "expect_status": "budget_exceeded", "expect_cost": 0}

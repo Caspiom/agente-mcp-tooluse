@@ -134,9 +134,60 @@ def test_erro_permanente_nao_e_repetido():
 
 def test_teto_de_custo_bloqueia_a_acao_antes_de_executar():
     fc = FakeClient([("96", False), ("480.00 BRL", False)])
-    a, _ = _agent(fc, max_cost_usd=0.0004)
+    a, _ = _agent(fc, max_cost_usd=0.0004, max_output_tokens=20)
     r = a.run("Calcule 12*8 e depois converta o resultado de USD para BRL")
     assert r.status == "budget_exceeded" and fc.calls == 1  # 2a ferramenta NAO foi chamada
+
+
+class CountingPolicy:
+    """Politica que conta quantas vezes o 'modelo' foi chamado."""
+    def __init__(self, inner):
+        self.inner, self.calls = inner, 0
+
+    def decide(self, q, scratch):
+        self.calls += 1
+        return self.inner.decide(q, scratch)
+
+
+def test_teto_duro_custo_final_nunca_passa_do_teto_e_nao_chama_o_modelo_que_estouraria():
+    pol = CountingPolicy(ScriptedPolicy())
+    fc = FakeClient([("96", False), ("480.00 BRL", False)])
+    r = Agent(fc, pol, max_cost_usd=0.0004, max_output_tokens=20, sleep=lambda s: None).run(
+        "Calcule 12*8 e depois converta o resultado de USD para BRL")
+    assert r.status == "budget_exceeded" and r.cost_usd <= 0.0004
+    assert pol.calls == 1                        # o 2o passo foi barrado ANTES de pagar o modelo
+    assert r.trace[-1]["type"] == "budget_block" and r.trace[-1]["est_pior_caso_usd"] > 0.0004 - r.cost_usd
+
+
+def test_teto_menor_que_um_passo_nao_chama_o_modelo_nem_gasta_nada():
+    pol = CountingPolicy(ScriptedPolicy())
+    fc = FakeClient([])
+    r = Agent(fc, pol, max_cost_usd=0.0001, max_output_tokens=20, sleep=lambda s: None).run("Calcule 1+1")
+    assert r.status == "budget_exceeded" and pol.calls == 0 and fc.calls == 0 and r.cost_usd == 0
+
+
+def test_pior_caso_cresce_com_o_historico_e_com_max_output_tokens():
+    a = Agent(FakeClient([]), ScriptedPolicy(), max_output_tokens=100)
+    b = Agent(FakeClient([]), ScriptedPolicy(), max_output_tokens=200)
+    from src.policy import Step
+    hist = [Step(Action("calculator", {"expression": "1+1"}), "2" * 400)]
+    assert a.worst_case_usd("oi", hist) > a.worst_case_usd("oi", []) and b.worst_case_usd("oi", []) > a.worst_case_usd("oi", [])
+
+
+def test_safety_margin_deixa_o_estimador_mais_conservador():
+    base = Agent(FakeClient([]), ScriptedPolicy()).worst_case_usd("oi", [])
+    assert Agent(FakeClient([]), ScriptedPolicy(), safety_margin=1.5).worst_case_usd("oi", []) == pytest.approx(base * 1.5)
+
+
+class Verbose:
+    """Politica que IGNORA max_output_tokens (o que um provedor impediria com max_tokens)."""
+    def decide(self, q, scratch):
+        return Final("x" * 400)
+
+
+def test_limite_conhecido_politica_que_ignora_max_tokens_ainda_e_pega_depois_da_chamada():
+    r = Agent(FakeClient([]), Verbose(), max_cost_usd=0.0004, max_output_tokens=20, sleep=lambda s: None).run("oi")
+    assert r.status == "budget_exceeded" and r.cost_usd > 0.0004   # documentado: so vale se max_tokens for respeitado
 
 
 def test_encadeamento_usa_a_observacao_anterior(cli):
