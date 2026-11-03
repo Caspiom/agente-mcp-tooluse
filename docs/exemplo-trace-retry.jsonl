@@ -1,0 +1,7 @@
+{"trace_id": "9bcfdb39", "span_id": 1, "type": "policy", "step": 1, "decision": "action", "thought": "consulta de estoque", "cost_usd": 0.000216, "cost_acumulado": 0.000216}
+{"trace_id": "9bcfdb39", "span_id": 2, "type": "tool", "step": 1, "tool": "inventory_check", "args": {"sku": "SKU-2"}, "attempt": 1, "latency_ms": 0.43, "status": "transient", "output": "TRANSIENT: timeout no servico de estoque"}
+{"trace_id": "9bcfdb39", "span_id": 3, "type": "backoff", "step": 1, "tool": "inventory_check", "delay_s": 0.2}
+{"trace_id": "9bcfdb39", "span_id": 4, "type": "tool", "step": 1, "tool": "inventory_check", "args": {"sku": "SKU-2"}, "attempt": 2, "latency_ms": 0.32, "status": "transient", "output": "TRANSIENT: timeout no servico de estoque"}
+{"trace_id": "9bcfdb39", "span_id": 5, "type": "backoff", "step": 1, "tool": "inventory_check", "delay_s": 0.4}
+{"trace_id": "9bcfdb39", "span_id": 6, "type": "tool", "step": 1, "tool": "inventory_check", "args": {"sku": "SKU-2"}, "attempt": 3, "latency_ms": 0.29, "status": "ok", "output": "SKU-2: 0 unidades"}
+{"trace_id": "9bcfdb39", "span_id": 7, "type": "policy", "step": 2, "decision": "final", "thought": "", "cost_usd": 0.00015, "cost_acumulado": 0.000366}

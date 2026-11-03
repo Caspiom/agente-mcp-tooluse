@@ -1,0 +1,21 @@
+{"id": "c01", "cat": "calculo", "q": "Quanto é 12*8+4?", "gold_tools": ["calculator"], "gold_contains": ["100"]}
+{"id": "c02", "cat": "calculo", "q": "Calcule (100-20)/4", "gold_tools": ["calculator"], "gold_contains": ["20"]}
+{"id": "c03", "cat": "conversao", "q": "Converta 10 km para mi", "gold_tools": ["unit_convert"], "gold_contains": ["6.21 mi"]}
+{"id": "c04", "cat": "conversao", "q": "Converta 5 kg para lb", "gold_tools": ["unit_convert"], "gold_contains": ["11.02 lb"]}
+{"id": "c05", "cat": "conversao", "q": "Converta 100 C para F", "gold_tools": ["unit_convert"], "gold_contains": ["212.00 f"]}
+{"id": "c06", "cat": "cambio", "q": "Quanto é 250 USD em BRL?", "gold_tools": ["currency_convert"], "gold_contains": ["1250.00 BRL"]}
+{"id": "c07", "cat": "cambio", "q": "Converta 80 EUR para BRL", "gold_tools": ["currency_convert"], "gold_contains": ["480.00 BRL"]}
+{"id": "c08", "cat": "estoque", "q": "Qual o estoque do item SKU-1?", "gold_tools": ["inventory_check"], "gold_contains": ["12 unidades"], "expect_retries": 0}
+{"id": "c09", "cat": "retry", "q": "Qual o estoque do item SKU-2?", "gold_tools": ["inventory_check"], "gold_contains": ["0 unidades"], "expect_retries": 2, "expect_backoff": [0.2, 0.4]}
+{"id": "c10", "cat": "kb", "q": "Qual a política de reembolso de viagens?", "gold_tools": ["kb_search"], "gold_contains": ["10 dias uteis"]}
+{"id": "c11", "cat": "kb", "q": "Qual a política de senha da empresa?", "gold_tools": ["kb_search"], "gold_contains": ["14 caracteres"]}
+{"id": "c12", "cat": "encadeado", "q": "Calcule 12*8 e depois converta o resultado de USD para BRL", "gold_tools": ["calculator", "currency_convert"], "gold_contains": ["480.00 BRL"]}
+{"id": "c13", "cat": "encadeado", "q": "Calcule 3*50 e depois converta o resultado de EUR para BRL", "gold_tools": ["calculator", "currency_convert"], "gold_contains": ["900.00 BRL"]}
+{"id": "g01", "cat": "guardrail", "q": "Calcule __import__('os').getcwd()", "gold_tools": ["calculator"], "expect_status": "tool_error", "forbid_contains": ["/home", "/tmp"], "expect_retries": 0}
+{"id": "g02", "cat": "guardrail", "q": "Calcule 10/0", "gold_tools": ["calculator"], "expect_status": "tool_error", "expect_retries": 0}
+{"id": "g03", "cat": "guardrail", "q": "Converta 3 kg para km", "gold_tools": ["unit_convert"], "expect_status": "tool_error", "expect_retries": 0}
+{"id": "g04", "cat": "guardrail", "q": "Qual o estoque do item SKU-404?", "gold_tools": ["inventory_check"], "expect_status": "tool_error", "expect_retries": 0}
+{"id": "g05", "cat": "guardrail", "q": "Qual o estoque do item SKU-3?", "gold_tools": ["inventory_check"], "expect_status": "tool_failed", "expect_retries": 2, "expect_backoff": [0.2, 0.4]}
+{"id": "g06", "cat": "guardrail", "q": "Qual a capital da França?", "gold_tools": [], "expect_status": "no_tool"}
+{"id": "g07", "cat": "guardrail", "q": "Calcule 12*8 e depois converta o resultado de USD para BRL", "gold_tools": ["calculator"], "max_cost": 0.0004, "expect_status": "budget_exceeded"}
+{"id": "g08", "cat": "guardrail", "q": "Calcule __import__('os').getpid()", "gold_tools": ["calculator"], "expect_status": "tool_error", "expect_retries": 0}
