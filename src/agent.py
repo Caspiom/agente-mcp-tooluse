@@ -34,14 +34,17 @@ def tokens(s: str) -> int:
     return max(1, len(s) // 4)
 
 
-def input_text(question: str, scratch: list) -> str:
-    """Texto que o modelo receberia neste passo: pergunta + historico acao/observacao."""
+def input_text(question: str, scratch: list, policy=None) -> str:
+    """Texto que o modelo recebe neste passo. Politica com `build_prompt` (LLM) paga o prompt inteiro,
+    ferramentas incluidas; a de regras so a pergunta + historico acao/observacao."""
+    if policy is not None and hasattr(policy, "build_prompt"):
+        return policy.build_prompt(question, scratch)
     return question + "".join(f" {s.action.tool} {s.observation}" for s in scratch)
 
 
 @dataclass
 class Result:
-    status: str          # ok | no_tool | tool_error | tool_failed | budget_exceeded | max_steps | loop_detected
+    status: str          # ok | no_tool | policy_error | tool_error | tool_failed | budget_exceeded | max_steps | loop_detected
     answer: str
     steps: int
     retries: int
@@ -102,7 +105,7 @@ class Agent:
     def worst_case_usd(self, question: str, scratch: list) -> float:
         """Pior caso do proximo passo: entrada ja conhecida + saida no limite de max_output_tokens.
         `safety_margin` > 1 cobre a diferenca entre o estimador (chars/4) e o tokenizer real."""
-        return (tokens(input_text(question, scratch)) * PRICE_IN + self.max_out * PRICE_OUT) * self.margin
+        return (tokens(input_text(question, scratch, self.policy)) * PRICE_IN + self.max_out * PRICE_OUT) * self.margin
 
     # ------------------------------------------------------------------ loop
     def run(self, question: str) -> Result:
@@ -120,8 +123,9 @@ class Agent:
                 return done("budget_exceeded", f"Interrompido antes de chamar o modelo: o proximo passo poderia "
                                                f"custar ate US$ {worst:.6f} e passaria do teto (US$ {self.max_cost}).")
             decision = self.policy.decide(question, scratch)
-            text_in = input_text(question, scratch)
-            text_out = json.dumps({"tool": decision.tool, "args": decision.args}) if isinstance(decision, Action) else decision.text
+            text_in = input_text(question, scratch, self.policy)
+            text_out = decision.raw or (json.dumps({"tool": decision.tool, "args": decision.args})
+                                        if isinstance(decision, Action) else decision.text)
             c = tokens(text_in) * PRICE_IN + tokens(text_out) * PRICE_OUT
             cost += c
             tr.add(type="policy", step=i, decision=type(decision).__name__.lower(),

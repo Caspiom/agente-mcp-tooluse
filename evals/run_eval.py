@@ -23,7 +23,8 @@ def run_case(c: dict, trace_dir: str | None = None) -> dict:
     sleeps: list[float] = []
     with McpClient() as cli:
         agent = Agent(cli, ScriptedPolicy(), max_cost_usd=c.get("max_cost", 0.01),
-                      max_output_tokens=c.get("max_output_tokens", 256), sleep=sleeps.append)
+                      max_output_tokens=c.get("max_output_tokens", 256),
+                      safety_margin=c.get("safety_margin", 1.0), sleep=sleeps.append)
         r = agent.run(c["q"])
     problems = []
     exp = c.get("expect_status", "ok")

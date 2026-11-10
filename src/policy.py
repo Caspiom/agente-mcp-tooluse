@@ -15,12 +15,14 @@ class Action:
     tool: str
     args: dict
     thought: str = ""
+    raw: str = ""
 
 
 @dataclass
 class Final:
     text: str
     status: str = "ok"
+    raw: str = ""
 
 
 @dataclass
